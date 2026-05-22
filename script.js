@@ -21,7 +21,7 @@ let expenseVisible = false;
 let currentUser = null;
 let currentUserId = null;
 let monthlyLimit = null;
-let lastToastPercent = 0; // to avoid repeated toasts
+let lastToastPercent = 0;
 
 // DOM elements
 const authOverlay = document.getElementById('authOverlay');
@@ -93,9 +93,7 @@ function showToast(message, type = 'info') {
   toast.className = `toast ${type}`;
   toast.innerText = message;
   document.body.appendChild(toast);
-  setTimeout(() => {
-    toast.remove();
-  }, 3000);
+  setTimeout(() => toast.remove(), 3000);
 }
 
 // Date filters
@@ -323,7 +321,7 @@ function renderAddMoneyTable() {
     addMoneyContainer.innerHTML = '<div class="empty-table-msg">No add money transactions for this period/search.</div>';
     return;
   }
-  let html = `<div class="transaction-table-wrapper"><table class="transaction-table"><thead><tr><th>Description</th><th>Timestamp</th><th>Amount</th><th>Actions</th></td></thead><tbody>`;
+  let html = `<div class="transaction-table-wrapper"><table class="transaction-table"><thead><tr><th>Description</th><th>Timestamp</th><th>Amount</th><th>Actions</th></tr></thead><tbody>`;
   sorted.forEach(t => {
     html += `<tr data-id="${t.id}">
       <td class="transaction-desc">${escapeHtml(t.desc)}</td>
@@ -346,7 +344,7 @@ function renderExpenseTable() {
     expenseContainer.innerHTML = '<div class="empty-table-msg">No expense transactions for this period/search.</div>';
     return;
   }
-  let html = `<div class="transaction-table-wrapper"><table class="transaction-table"><thead><tr><th>Category</th><th>Description</th><th>Timestamp</th><th>Amount</th><th>Actions</th></td></thead><tbody>`;
+  let html = `<div class="transaction-table-wrapper"><table class="transaction-table"><thead><tr><th>Category</th><th>Description</th><th>Timestamp</th><th>Amount</th><th>Actions</th></tr></thead><tbody>`;
   sorted.forEach(t => {
     html += `<tr data-id="${t.id}">
       <td><span class="category-badge">${escapeHtml(t.category)}</span></td>
@@ -354,7 +352,7 @@ function renderExpenseTable() {
       <td class="transaction-timestamp"><i class="far fa-calendar-alt"></i> ${escapeHtml(new Date(t.timestamp).toLocaleString())}</td>
       <td class="transaction-amount expense-amount">${formatNaira(t.amount)}</td>
       <td><button class="edit-trans" data-id="${t.id}"><i class="fas fa-edit"></i></button> <button class="delete-trans" data-id="${t.id}"><i class="fas fa-trash-alt"></i></button></td>
-    </tr>`;
+    </td>`;
   });
   html += `</tbody></table></div>`;
   expenseContainer.innerHTML = html;
@@ -440,7 +438,7 @@ async function addExpense(amount, desc, category) {
   await saveUserData();
   if (expenseVisible) { renderExpenseTable(); if (spendingChart) updateChart(); }
   updateBalanceDisplay();
-  updateMonthlySpending(); // triggers toast if needed
+  updateMonthlySpending();
   return true;
 }
 async function deleteTransaction(id) {
@@ -622,10 +620,12 @@ async function handleLogin() {
     const userCredential = await auth.signInWithEmailAndPassword(email, password);
     const user = userCredential.user;
     if (!user.emailVerified) {
+      // Show verification notice with resend option
       authOverlay.style.display = 'none';
       verifyNotice.style.display = 'flex';
       currentUser = user;
       currentUserId = user.uid;
+      // Add a manual refresh option to check if email was verified in another tab
       return;
     }
     currentUser = user;
@@ -667,10 +667,11 @@ async function handleRegister() {
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     await auth.signOut();
-    alert("Registration successful! A verification email has been sent. Please verify your email, then log in.");
+    alert("✅ Registration successful! A verification email has been sent to " + email + ".\n\n📧 Please check your inbox and spam folder, then click the link to verify your email.\n\nAfter verification, log in.");
     switchTab(true);
     document.getElementById('loginEmail').value = email;
     document.getElementById('loginPassword').value = '';
+    // Clear registration form
     document.getElementById('regFullName').value = '';
     document.getElementById('regEmail').value = '';
     document.getElementById('regPassword').value = '';
@@ -681,8 +682,12 @@ async function handleRegister() {
 }
 async function resendVerificationEmail() {
   if (currentUser && !currentUser.emailVerified) {
-    await currentUser.sendEmailVerification();
-    alert("Verification email resent. Please check your inbox.");
+    try {
+      await currentUser.sendEmailVerification();
+      alert(`✅ Verification email resent to ${currentUser.email}. Please check your inbox and spam folder.`);
+    } catch(e) {
+      alert("Failed to resend: " + e.message);
+    }
   } else {
     logout();
   }
@@ -713,6 +718,20 @@ function logout() {
     document.getElementById('regPassword').value = '';
     document.getElementById('regConfirmPassword').value = '';
   });
+}
+
+// Manual check for email verification (for users who verified in another tab)
+async function checkVerificationStatus() {
+  if (currentUser && !currentUser.emailVerified) {
+    await currentUser.reload();
+    if (currentUser.emailVerified) {
+      // User just verified, reload the app
+      alert("✅ Email verified! You can now log in.");
+      logout(); // return to login screen
+    } else {
+      alert("Email still not verified. Please check your inbox and spam folder.");
+    }
+  }
 }
 
 function initPasswordToggles() {
@@ -760,6 +779,20 @@ resendVerifyBtn.addEventListener('click', resendVerificationEmail);
 logoutFromVerifyBtn.addEventListener('click', logout);
 exportCsvBtn.addEventListener('click', exportToCSV);
 setLimitBtn.addEventListener('click', setMonthlyLimit);
+
+// Add a "Check Now" button to the verification notice (if it doesn't exist, add dynamically)
+if (resendVerifyBtn && resendVerifyBtn.parentNode) {
+  let checkBtn = document.getElementById('checkVerifyBtn');
+  if (!checkBtn) {
+    checkBtn = document.createElement('button');
+    checkBtn.id = 'checkVerifyBtn';
+    checkBtn.className = 'small-btn';
+    checkBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Check Now';
+    checkBtn.style.marginLeft = '8px';
+    checkBtn.addEventListener('click', checkVerificationStatus);
+    resendVerifyBtn.parentNode.appendChild(checkBtn);
+  }
+}
 
 // Profile picture events
 profileUpload.addEventListener('change', handleProfileUpload);
