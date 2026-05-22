@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpendWise | Smart ₦ Expense Manager</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- Authentication Overlay -->
+<div id="authOverlay" class="overlay">
+  <div class="auth-card">
+    <div class="auth-tabs">
+      <button id="loginTabBtn" class="auth-tab active">Login</button>
+      <button id="registerTabBtn" class="auth-tab">Register</button>
+    </div>
+    
+    <!-- Login Form -->
+    <div id="loginForm" class="auth-form">
+      <h2><i class="fas fa-sign-in-alt"></i> Welcome Back</h2>
+      <div class="form-group">
+        <input type="email" id="loginEmail" placeholder="Email Address" required>
+      </div>
+      <div class="form-group password-wrapper">
+        <input type="password" id="loginPassword" placeholder="Password" required>
+        <i class="fas fa-eye toggle-password" data-target="loginPassword"></i>
+      </div>
+      <button id="loginBtn" class="auth-btn">Login</button>
+    </div>
+    
+    <!-- Register Form -->
+    <div id="registerForm" class="auth-form" style="display: none;">
+      <h2><i class="fas fa-user-plus"></i> Create Account</h2>
+      <div class="form-group">
+        <input type="text" id="regFullName" placeholder="Full Name" required>
+      </div>
+      <div class="form-group">
+        <input type="email" id="regEmail" placeholder="Email Address" required>
+      </div>
+      <div class="form-group password-wrapper">
+        <input type="password" id="regPassword" placeholder="Password" required>
+        <i class="fas fa-eye toggle-password" data-target="regPassword"></i>
+      </div>
+      <div class="form-group password-wrapper">
+        <input type="password" id="regConfirmPassword" placeholder="Confirm Password" required>
+        <i class="fas fa-eye toggle-password" data-target="regConfirmPassword"></i>
+      </div>
+      <button id="registerBtn" class="auth-btn">Register</button>
+    </div>
+  </div>
+</div>
+
+<!-- Main App (same as before) -->
+<div class="app-container" id="appContainer" style="display: none;">
+  <header>
+    <div class="logo-area">
+      <h1><i class="fas fa-wallet"></i> SpendWise</h1>
+      <p>Add money → spend wisely → track every naira</p>
+    </div>
+    <div class="header-buttons">
+      <button id="logoutBtn" class="dark-mode-btn"><i class="fas fa-sign-out-alt"></i> Logout</button>
+      <button id="darkModeToggle" class="dark-mode-btn"><i class="fas fa-moon"></i></button>
+    </div>
+  </header>
+
+  <div class="profile-section">
+    <div class="profile-pic-wrapper" id="profilePicWrapper">
+      <img id="profileImage" src="https://ui-avatars.com/api/?background=1c6e5e&color=fff&rounded=true&size=120&bold=true" alt="Profile">
+      <div class="profile-overlay">
+        <label for="profileUpload" class="upload-icon"><i class="fas fa-camera"></i></label>
+        <button id="removeProfileBtn" class="remove-icon"><i class="fas fa-trash-alt"></i></button>
+      </div>
+      <input type="file" id="profileUpload" accept="image/*" style="display: none;">
+    </div>
+    <span id="userDisplay" class="profile-name"></span>
+  </div>
+
+  <div class="balance-card">
+    <h3>Current Balance</h3>
+    <div class="balance-amount" id="balanceAmount">₦0.00</div>
+  </div>
+
+  <div class="action-row">
+    <div class="action-card" id="showAddMoneyPanel">
+      <i class="fas fa-plus-circle"></i>
+      <h3>Add Money</h3>
+      <p>Top up your wallet (₦)</p>
+    </div>
+    <div class="action-card" id="showExpensePanel">
+      <i class="fas fa-shopping-cart"></i>
+      <h3>Add Expense</h3>
+      <p>Record a purchase (₦)</p>
+    </div>
+  </div>
+
+  <div id="dynamicPanel" class="dynamic-panel"></div>
+
+  <div class="history-section">
+    <div class="history-header">
+      <h3><i class="fas fa-history"></i> Transaction History</h3>
+      <div class="action-buttons">
+        <button id="toggleAddMoneyBtn" class="small-btn"><i class="fas fa-eye"></i> Show Add Money</button>
+        <button id="toggleExpenseBtn" class="small-btn"><i class="fas fa-eye"></i> Show Expenses</button>
+        <button id="clearAllDataBtn" class="small-btn"><i class="fas fa-trash-alt"></i> Clear All</button>
+      </div>
+    </div>
+    <div id="addMoneySection" style="display: none;">
+      <div class="table-controls">
+        <select id="addPeriodFilter" class="period-select">
+          <option value="all">📅 All Time</option>
+          <option value="week">📆 This Week</option>
+          <option value="month">📆 This Month</option>
+        </select>
+        <input type="text" id="addSearchInput" placeholder="🔍 Search description" class="search-input">
+      </div>
+      <div id="addMoneyTableContainer"></div>
+    </div>
+    <div id="expenseSection" style="display: none;">
+      <div class="table-controls">
+        <select id="expensePeriodFilter" class="period-select">
+          <option value="all">📅 All Time</option>
+          <option value="week">📆 This Week</option>
+          <option value="month">📆 This Month</option>
+        </select>
+        <input type="text" id="expenseSearchInput" placeholder="🔍 Search description/category" class="search-input">
+      </div>
+      <div id="expenseTableContainer"></div>
+    </div>
+  </div>
+
+  <div id="chartWrapper" class="chart-wrapper" style="display: none;">
+    <h3><i class="fas fa-chart-pie"></i> Spending by category</h3>
+    <div class="chart-container">
+      <canvas id="spendingChart" width="300" height="300"></canvas>
+    </div>
+    <div class="chart-note">Expenses only (filtered by Expense History period)</div>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div id="editModal" class="modal">
+  <div class="modal-content">
+    <span class="close-modal">&times;</span>
+    <h3><i class="fas fa-edit"></i> Edit Transaction</h3>
+    <div class="form-group">
+      <label>Type:</label>
+      <select id="editType"><option value="add">Add Money</option><option value="expense">Expense</option></select>
+    </div>
+    <div class="form-group">
+      <label>Description:</label>
+      <input type="text" id="editDesc" placeholder="Description">
+    </div>
+    <div class="form-group">
+      <label>Amount (₦):</label>
+      <input type="number" id="editAmount" step="any" min="0" placeholder="0.00">
+    </div>
+    <div class="form-group" id="editCategoryGroup">
+      <label>Category:</label>
+      <select id="editCategory">
+        <option value="Food">🍔 Food</option><option value="Transport">🚗 Transport</option>
+        <option value="Entertainment">🎬 Entertainment</option><option value="Shopping">🛍️ Shopping</option>
+        <option value="Bills">💡 Bills</option><option value="Other">📌 Other</option>
+      </select>
+    </div>
+    <div class="modal-buttons">
+      <button id="saveEditBtn" class="small-btn">Save Changes</button>
+      <button id="cancelEditBtn" class="small-btn cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
