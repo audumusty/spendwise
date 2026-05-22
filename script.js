@@ -20,6 +20,7 @@ let currentUser = null;
 let currentUserId = null;
 let monthlyLimit = null;
 let lastToastPercent = 0;
+let verificationInterval = null;
 
 // DOM elements
 const authOverlay = document.getElementById('authOverlay');
@@ -149,10 +150,7 @@ function exportToCSV() { /* existing */ }
 function compressImage(file, maxKB, callback) { /* existing */ }
 
 // ========== PASSWORD MANAGEMENT ==========
-// Forgot password
-function openForgotModal() {
-  forgotModal.style.display = 'flex';
-}
+function openForgotModal() { forgotModal.style.display = 'flex'; }
 async function sendResetEmail() {
   const email = resetEmail.value.trim();
   if (!email) { alert("Enter your email address."); return; }
@@ -160,22 +158,10 @@ async function sendResetEmail() {
     await auth.sendPasswordResetEmail(email);
     showToast(`Reset email sent to ${email}`, 'success');
     closeForgotModalFunc();
-  } catch(e) {
-    alert("Error: " + e.message);
-  }
+  } catch(e) { alert("Error: " + e.message); }
 }
-function closeForgotModalFunc() {
-  forgotModal.style.display = 'none';
-  resetEmail.value = '';
-}
-
-// Change password (requires re-authentication)
-function openChangePasswordModal() {
-  changePasswordModal.style.display = 'flex';
-  currentPassword.value = '';
-  newPassword.value = '';
-  confirmNewPassword.value = '';
-}
+function closeForgotModalFunc() { forgotModal.style.display = 'none'; resetEmail.value = ''; }
+function openChangePasswordModal() { changePasswordModal.style.display = 'flex'; currentPassword.value = ''; newPassword.value = ''; confirmNewPassword.value = ''; }
 async function updatePassword() {
   const curr = currentPassword.value;
   const newPwd = newPassword.value;
@@ -183,8 +169,6 @@ async function updatePassword() {
   if (!curr || !newPwd || !confirm) { alert("All fields required"); return; }
   if (newPwd !== confirm) { alert("New passwords do not match"); return; }
   if (newPwd.length < 6) { alert("Password must be at least 6 characters"); return; }
-
-  // Re-authenticate the user before updating password
   const user = auth.currentUser;
   const email = user.email;
   const credential = firebase.auth.EmailAuthProvider.credential(email, curr);
@@ -193,15 +177,45 @@ async function updatePassword() {
     await user.updatePassword(newPwd);
     showToast("Password changed successfully", 'success');
     closeChangeModalFunc();
-  } catch(e) {
-    alert("Failed: " + e.message);
-  }
+  } catch(e) { alert("Failed: " + e.message); }
 }
-function closeChangeModalFunc() {
-  changePasswordModal.style.display = 'none';
-  currentPassword.value = '';
-  newPassword.value = '';
-  confirmNewPassword.value = '';
+function closeChangeModalFunc() { changePasswordModal.style.display = 'none'; currentPassword.value = ''; newPassword.value = ''; confirmNewPassword.value = ''; }
+
+// ========== AUTO VERIFICATION CHECK ==========
+function startVerificationCheck() {
+  if (verificationInterval) clearInterval(verificationInterval);
+  verificationInterval = setInterval(async () => {
+    if (currentUser && !currentUser.emailVerified) {
+      await currentUser.reload();
+      if (currentUser.emailVerified) {
+        // Stop checking
+        clearInterval(verificationInterval);
+        verificationInterval = null;
+        // Show success toast and redirect to login
+        showToast("✅ Email verified! Please log in.", 'success');
+        // Switch to login tab
+        switchTab(true);
+        // Clear register panel
+        registerVerifyPanel.style.display = 'none';
+        // Optionally clear registration form fields
+        document.getElementById('regFullName').value = '';
+        document.getElementById('regEmail').value = '';
+        document.getElementById('regPassword').value = '';
+        document.getElementById('regConfirmPassword').value = '';
+        // Sign out the unverified user (since they are now verified, but we want them to log in)
+        await auth.signOut();
+        currentUser = null;
+        currentUserId = null;
+      }
+    }
+  }, 3000); // check every 3 seconds
+}
+
+function stopVerificationCheck() {
+  if (verificationInterval) {
+    clearInterval(verificationInterval);
+    verificationInterval = null;
+  }
 }
 
 // ========== AUTH UI ==========
@@ -211,6 +225,9 @@ function switchTab(showLogin) {
     registerForm.style.display = 'none';
     loginTab.classList.add('active');
     registerTab.classList.remove('active');
+    // If we are on register page and had a verification check, stop it because user switched manually
+    stopVerificationCheck();
+    registerVerifyPanel.style.display = 'none';
   } else {
     loginForm.style.display = 'none';
     registerForm.style.display = 'block';
@@ -266,12 +283,15 @@ async function handleRegister() {
     currentUser = cred.user;
     currentUserId = cred.user.uid;
     showToast(`✅ Verification sent to ${email}`, 'success');
-    // Clear form and show resend panel
+    // Clear form fields
     document.getElementById('regFullName').value = '';
     document.getElementById('regEmail').value = '';
     document.getElementById('regPassword').value = '';
     document.getElementById('regConfirmPassword').value = '';
+    // Show resend panel on register page
     registerVerifyPanel.style.display = 'block';
+    // Start automatic verification check
+    startVerificationCheck();
   } catch(e) { alert("Registration failed: " + e.message); }
 }
 
@@ -283,7 +303,14 @@ async function resendVerificationFromRegister() {
     } catch(e) { alert("Error: " + e.message); }
   } else { alert("No unverified user found."); }
 }
-function logoutFromRegister() { auth.signOut().then(() => { currentUser = null; registerVerifyPanel.style.display = 'none'; switchTab(true); }); }
+function logoutFromRegister() {
+  stopVerificationCheck();
+  auth.signOut().then(() => {
+    currentUser = null;
+    registerVerifyPanel.style.display = 'none';
+    switchTab(true);
+  });
+}
 async function resendVerificationFromNotice() {
   if (currentUser && !currentUser.emailVerified) {
     try { await currentUser.sendEmailVerification(); showToast(`✅ Resent to ${currentUser.email}`, 'success'); } catch(e) { alert("Error: " + e.message); }
@@ -291,6 +318,7 @@ async function resendVerificationFromNotice() {
 }
 function logoutFromNotice() { logout(); }
 function logout() {
+  stopVerificationCheck();
   auth.signOut().then(() => {
     currentUser = null;
     currentUserId = null;
@@ -315,6 +343,7 @@ function logout() {
     document.getElementById('regConfirmPassword').value = '';
   });
 }
+
 function initPasswordToggles() {
   document.querySelectorAll('.toggle-password').forEach(icon => {
     icon.addEventListener('click', function() {
@@ -325,7 +354,7 @@ function initPasswordToggles() {
   });
 }
 
-// Event listeners
+// Event listeners (same as before)
 showAddMoneyPanelBtn.addEventListener('click', showAddMoneyPanelUI);
 showExpensePanelBtn.addEventListener('click', showExpensePanelUI);
 toggleAddMoneyBtn.addEventListener('click', toggleAddMoney);
@@ -371,11 +400,15 @@ auth.onAuthStateChanged(async (user) => {
     if (!user.emailVerified) {
       authOverlay.style.display = 'none';
       appContainer.style.display = 'none';
-      verifyNotice.style.display = 'none';   // we show register panel
+      verifyNotice.style.display = 'none';
       currentUser = user;
       currentUserId = user.uid;
       if (registerForm.style.display !== 'none') registerVerifyPanel.style.display = 'block';
       else registerVerifyPanel.style.display = 'none';
+      // If we are on register tab and have an unverified user, start verification check
+      if (registerForm.style.display !== 'none' && verificationInterval === null && !user.emailVerified) {
+        startVerificationCheck();
+      }
     } else {
       currentUser = user;
       currentUserId = user.uid;
@@ -393,6 +426,8 @@ auth.onAuthStateChanged(async (user) => {
       if (spendingChart) spendingChart.destroy();
       spendingChart = null;
       dynamicPanelDiv.innerHTML = '';
+      // Stop any running verification check
+      stopVerificationCheck();
     }
   } else {
     authOverlay.style.display = 'flex';
@@ -401,6 +436,7 @@ auth.onAuthStateChanged(async (user) => {
     registerVerifyPanel.style.display = 'none';
     currentUser = null;
     currentUserId = null;
+    stopVerificationCheck();
   }
 });
 initDarkMode();
