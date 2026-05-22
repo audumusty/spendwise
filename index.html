@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>SpendWise | Smart ₦ Expense Manager</title>
   <link rel="stylesheet" href="style.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700&display=swap" rel="stylesheet">
@@ -11,7 +11,7 @@
 </head>
 <body>
 
-<!-- Authentication Overlay -->
+<!-- Authentication Overlay (Login / Register) -->
 <div id="authOverlay" class="overlay">
   <div class="auth-card">
     <div class="auth-tabs">
@@ -54,7 +54,18 @@
   </div>
 </div>
 
-<!-- Main App (same as before) -->
+<!-- Email Verification Notice -->
+<div id="verifyNotice" class="verify-notice" style="display: none;">
+  <div class="verify-card">
+    <i class="fas fa-envelope"></i>
+    <h3>Verify Your Email</h3>
+    <p>We've sent a verification link to your email address. Please verify your account to access SpendWise.</p>
+    <button id="resendVerifyBtn" class="small-btn">Resend Email</button>
+    <button id="logoutFromVerifyBtn" class="small-btn cancel">Logout</button>
+  </div>
+</div>
+
+<!-- Main App -->
 <div class="app-container" id="appContainer" style="display: none;">
   <header>
     <div class="logo-area">
@@ -67,6 +78,7 @@
     </div>
   </header>
 
+  <!-- Profile Section -->
   <div class="profile-section">
     <div class="profile-pic-wrapper" id="profilePicWrapper">
       <img id="profileImage" src="https://ui-avatars.com/api/?background=1c6e5e&color=fff&rounded=true&size=120&bold=true" alt="Profile">
@@ -79,11 +91,31 @@
     <span id="userDisplay" class="profile-name"></span>
   </div>
 
+  <!-- Balance Card -->
   <div class="balance-card">
     <h3>Current Balance</h3>
     <div class="balance-amount" id="balanceAmount">₦0.00</div>
   </div>
 
+  <!-- Monthly Spending Limit Section -->
+  <div class="limit-section">
+    <div class="limit-header">
+      <h3><i class="fas fa-chart-line"></i> Monthly Spending Limit</h3>
+      <div class="limit-input-group">
+        <input type="number" id="monthlyLimitInput" placeholder="Set limit (₦)" step="1000" min="0">
+        <button id="setLimitBtn" class="small-btn">Set</button>
+      </div>
+    </div>
+    <div class="progress-container">
+      <div class="progress-bar" id="spendingProgressBar" style="width: 0%"></div>
+    </div>
+    <div class="limit-stats">
+      <span id="currentMonthSpending">₦0.00 spent</span>
+      <span id="limitStatus">No limit set</span>
+    </div>
+  </div>
+
+  <!-- Action Cards -->
   <div class="action-row">
     <div class="action-card" id="showAddMoneyPanel">
       <i class="fas fa-plus-circle"></i>
@@ -99,10 +131,12 @@
 
   <div id="dynamicPanel" class="dynamic-panel"></div>
 
+  <!-- Transaction History -->
   <div class="history-section">
     <div class="history-header">
       <h3><i class="fas fa-history"></i> Transaction History</h3>
       <div class="action-buttons">
+        <button id="exportCsvBtn" class="small-btn"><i class="fas fa-download"></i> Export CSV</button>
         <button id="toggleAddMoneyBtn" class="small-btn"><i class="fas fa-eye"></i> Show Add Money</button>
         <button id="toggleExpenseBtn" class="small-btn"><i class="fas fa-eye"></i> Show Expenses</button>
         <button id="clearAllDataBtn" class="small-btn"><i class="fas fa-trash-alt"></i> Clear All</button>
@@ -132,6 +166,7 @@
     </div>
   </div>
 
+  <!-- Chart -->
   <div id="chartWrapper" class="chart-wrapper" style="display: none;">
     <h3><i class="fas fa-chart-pie"></i> Spending by category</h3>
     <div class="chart-container">

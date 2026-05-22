@@ -20,10 +20,13 @@ let addMoneyVisible = false;
 let expenseVisible = false;
 let currentUser = null;
 let currentUserId = null;
+let monthlyLimit = null; // stored as number (₦)
+let currentMonthSpending = 0;
 
 // DOM elements
 const authOverlay = document.getElementById('authOverlay');
 const appContainer = document.getElementById('appContainer');
+const verifyNotice = document.getElementById('verifyNotice');
 const loginFormDiv = document.getElementById('loginForm');
 const registerFormDiv = document.getElementById('registerForm');
 const loginTab = document.getElementById('loginTabBtn');
@@ -31,6 +34,8 @@ const registerTab = document.getElementById('registerTabBtn');
 const loginBtn = document.getElementById('loginBtn');
 const registerBtn = document.getElementById('registerBtn');
 const logoutBtn = document.getElementById('logoutBtn');
+const resendVerifyBtn = document.getElementById('resendVerifyBtn');
+const logoutFromVerifyBtn = document.getElementById('logoutFromVerifyBtn');
 const userDisplay = document.getElementById('userDisplay');
 const profileImage = document.getElementById('profileImage');
 const profileUpload = document.getElementById('profileUpload');
@@ -54,6 +59,14 @@ const expenseSearchInput = document.getElementById('expenseSearchInput');
 const chartWrapper = document.getElementById('chartWrapper');
 const darkModeToggle = document.getElementById('darkModeToggle');
 const clearAllDataBtn = document.getElementById('clearAllDataBtn');
+const exportCsvBtn = document.getElementById('exportCsvBtn');
+
+// Limit elements
+const monthlyLimitInput = document.getElementById('monthlyLimitInput');
+const setLimitBtn = document.getElementById('setLimitBtn');
+const spendingProgressBar = document.getElementById('spendingProgressBar');
+const currentMonthSpendingSpan = document.getElementById('currentMonthSpending');
+const limitStatusSpan = document.getElementById('limitStatus');
 
 // Edit modal
 const editModal = document.getElementById('editModal');
@@ -67,7 +80,7 @@ const editCategory = document.getElementById('editCategory');
 const editCategoryGroup = document.getElementById('editCategoryGroup');
 let currentEditId = null;
 
-// ========== HELPER FUNCTIONS ==========
+// Helper functions
 function formatNaira(amount) {
   return '₦' + amount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -104,19 +117,22 @@ async function loadUserData() {
   if (userDoc.exists) {
     const data = userDoc.data();
     transactions = data.transactions || [];
+    monthlyLimit = data.monthlyLimit || null;
+    if (monthlyLimit) monthlyLimitInput.value = monthlyLimit;
+    else monthlyLimitInput.value = '';
     const profilePic = data.profilePic || null;
     if (profilePic) {
       currentUser.photoURL = profilePic;
       profileImage.src = profilePic;
     } else {
       const initials = currentUser.displayName ? currentUser.displayName.charAt(0).toUpperCase() : 'U';
-      // Updated to size 180 to match larger profile picture container
       profileImage.src = `https://ui-avatars.com/api/?name=${initials}&background=1c6e5e&color=fff&rounded=true&size=180&bold=true&t=${Date.now()}`;
     }
   } else {
     transactions = [];
   }
   updateBalanceDisplay();
+  updateMonthlySpending();
   if (addMoneyVisible) renderAddMoneyTable();
   if (expenseVisible) { renderExpenseTable(); if (spendingChart) updateChart(); }
 }
@@ -125,6 +141,7 @@ async function saveUserData() {
   if (!currentUserId) return;
   await db.collection('users').doc(currentUserId).set({
     transactions: transactions,
+    monthlyLimit: monthlyLimit,
     profilePic: currentUser.photoURL || null,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
@@ -146,11 +163,92 @@ async function removeProfilePictureFromFirestore() {
     profilePic: null
   }, { merge: true });
   const initials = currentUser.displayName ? currentUser.displayName.charAt(0).toUpperCase() : 'U';
-  // Updated to size 180
   profileImage.src = `https://ui-avatars.com/api/?name=${initials}&background=1c6e5e&color=fff&rounded=true&size=180&bold=true&t=${Date.now()}`;
 }
 
-// Image compression
+// ========== MONTHLY SPENDING LIMIT ==========
+function getCurrentMonthExpenses() {
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+  return transactions
+    .filter(t => {
+      if (t.type !== 'expense') return false;
+      const d = new Date(t.timestamp);
+      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+    })
+    .reduce((sum, t) => sum + t.amount, 0);
+}
+
+function updateMonthlySpending() {
+  currentMonthSpending = getCurrentMonthExpenses();
+  currentMonthSpendingSpan.innerText = formatNaira(currentMonthSpending);
+  if (monthlyLimit && monthlyLimit > 0) {
+    const percent = Math.min(100, (currentMonthSpending / monthlyLimit) * 100);
+    spendingProgressBar.style.width = percent + '%';
+    if (percent >= 100) {
+      spendingProgressBar.classList.add('danger');
+      spendingProgressBar.classList.remove('warning');
+      limitStatusSpan.innerText = '⚠️ Limit exceeded!';
+      limitStatusSpan.style.color = '#ef4444';
+    } else if (percent >= 80) {
+      spendingProgressBar.classList.add('warning');
+      spendingProgressBar.classList.remove('danger');
+      limitStatusSpan.innerText = '⚠️ Getting close to limit';
+      limitStatusSpan.style.color = '#f59e0b';
+    } else {
+      spendingProgressBar.classList.remove('warning', 'danger');
+      limitStatusSpan.innerText = `${percent.toFixed(1)}% used`;
+      limitStatusSpan.style.color = 'var(--text-color)';
+    }
+  } else {
+    spendingProgressBar.style.width = '0%';
+    limitStatusSpan.innerText = 'No limit set';
+    limitStatusSpan.style.color = 'var(--text-color)';
+  }
+}
+
+async function setMonthlyLimit() {
+  let value = parseFloat(monthlyLimitInput.value);
+  if (isNaN(value) || value <= 0) {
+    monthlyLimit = null;
+    monthlyLimitInput.value = '';
+    alert("Limit removed.");
+  } else {
+    monthlyLimit = value;
+  }
+  await saveUserData();
+  updateMonthlySpending();
+}
+
+// ========== EXPORT CSV ==========
+function exportToCSV() {
+  // Export all transactions (not filtered by period – full history)
+  if (transactions.length === 0) {
+    alert("No transactions to export.");
+    return;
+  }
+  const headers = ["Type", "Description", "Category", "Amount (₦)", "Timestamp"];
+  const rows = transactions.map(t => {
+    const type = t.type === 'add' ? 'Add Money' : 'Expense';
+    const category = t.type === 'expense' ? (t.category || 'Other') : '';
+    const amount = t.amount.toFixed(2);
+    const timestamp = new Date(t.timestamp).toLocaleString();
+    return [type, t.desc, category, amount, timestamp];
+  });
+  const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(",")).join("\n");
+  const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  link.href = url;
+  link.setAttribute("download", `spendwise_export_${new Date().toISOString().slice(0,19)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+// ========== IMAGE COMPRESSION ==========
 function compressImage(file, maxSizeKB = 300, callback) {
   const reader = new FileReader();
   reader.readAsDataURL(file);
@@ -237,7 +335,7 @@ function renderExpenseTable() {
       <td><button class="edit-trans" data-id="${t.id}"><i class="fas fa-edit"></i></button> <button class="delete-trans" data-id="${t.id}"><i class="fas fa-trash-alt"></i></button></td>
     </tr>`;
   });
-  html += `</tbody></table></div>`;
+  html += `</tbody><table></div>`;
   expenseContainer.innerHTML = html;
 }
 
@@ -286,7 +384,7 @@ function onExpenseFilterChange() {
   if (expenseVisible) { renderExpenseTable(); if (spendingChart) updateChart(); }
 }
 
-// CRUD with Firebase save
+// ========== CRUD OPERATIONS ==========
 async function addMoney(amount, desc) {
   if (isNaN(amount) || amount <= 0) { alert("💰 Please enter a positive amount."); return false; }
   if (!desc.trim()) { alert("📝 Description required."); return false; }
@@ -321,6 +419,7 @@ async function addExpense(amount, desc, category) {
   await saveUserData();
   if (expenseVisible) { renderExpenseTable(); if (spendingChart) updateChart(); }
   updateBalanceDisplay();
+  updateMonthlySpending(); // update spending limit progress
   return true;
 }
 async function deleteTransaction(id) {
@@ -338,6 +437,7 @@ async function deleteTransaction(id) {
   if (addMoneyVisible) renderAddMoneyTable();
   if (expenseVisible) { renderExpenseTable(); if (spendingChart) updateChart(); }
   updateBalanceDisplay();
+  updateMonthlySpending();
 }
 async function editTransaction(id, newType, newDesc, newAmount, newCategory) {
   const index = transactions.findIndex(t => t.id === id);
@@ -354,6 +454,7 @@ async function editTransaction(id, newType, newDesc, newAmount, newCategory) {
   if (addMoneyVisible) renderAddMoneyTable();
   if (expenseVisible) { renderExpenseTable(); if (spendingChart) updateChart(); }
   updateBalanceDisplay();
+  updateMonthlySpending();
   return true;
 }
 async function clearAllData() {
@@ -363,10 +464,11 @@ async function clearAllData() {
     if (addMoneyVisible) renderAddMoneyTable();
     if (expenseVisible) { renderExpenseTable(); if (spendingChart) updateChart(); }
     updateBalanceDisplay();
+    updateMonthlySpending();
   }
 }
 
-// Edit modal handlers
+// ========== EDIT MODAL ==========
 function openEditModal(id) {
   const t = transactions.find(t => t.id === id);
   if (!t) return;
@@ -390,7 +492,7 @@ function saveEdit() {
   editTransaction(currentEditId, newType, newDesc, newAmount, newCategory).then(() => closeEditModal());
 }
 
-// UI panels
+// ========== UI PANELS ==========
 function showAddMoneyPanelUI() {
   dynamicPanelDiv.innerHTML = `<button class="close-panel" id="closePanel"><i class="fas fa-times"></i></button>
     <div class="panel-title"><i class="fas fa-plus-circle"></i> Add money (₦)</div>
@@ -443,7 +545,7 @@ function setupDelegation() {
   });
 }
 
-// Dark mode
+// ========== DARK MODE ==========
 function initDarkMode() {
   const saved = localStorage.getItem('darkMode');
   if (saved === 'enabled') document.body.classList.add('dark');
@@ -456,7 +558,7 @@ function toggleDarkMode() {
   darkModeToggle.innerHTML = isDark ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
 }
 
-// Profile picture handlers
+// ========== PROFILE PICTURE ==========
 function handleProfileUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -477,7 +579,7 @@ function removeProfilePicture() {
   }
 }
 
-// Auth UI
+// ========== AUTH UI ==========
 function switchTab(showLogin) {
   if (showLogin) {
     loginFormDiv.style.display = 'block';
@@ -497,12 +599,22 @@ async function handleLogin() {
   if (!email || !password) { alert("Please fill all fields."); return; }
   try {
     const userCredential = await auth.signInWithEmailAndPassword(email, password);
-    currentUser = userCredential.user;
-    currentUserId = currentUser.uid;
+    const user = userCredential.user;
+    if (!user.emailVerified) {
+      // Show verification notice
+      authOverlay.style.display = 'none';
+      verifyNotice.style.display = 'flex';
+      currentUser = user; // store partially for resend
+      currentUserId = user.uid;
+      return;
+    }
+    currentUser = user;
+    currentUserId = user.uid;
     userDisplay.innerText = currentUser.displayName || email.split('@')[0];
     await loadUserData();
     authOverlay.style.display = 'none';
     appContainer.style.display = 'block';
+    verifyNotice.style.display = 'none';
     addMoneyVisible = false; expenseVisible = false;
     addMoneySection.style.display = 'none';
     expenseSection.style.display = 'none';
@@ -525,19 +637,30 @@ async function handleRegister() {
   try {
     const userCredential = await auth.createUserWithEmailAndPassword(email, password);
     await userCredential.user.updateProfile({ displayName: fullName });
+    // Send verification email
+    await userCredential.user.sendEmailVerification();
     await db.collection('users').doc(userCredential.user.uid).set({
       fullName: fullName,
       email: email,
       transactions: [],
       profilePic: null,
+      monthlyLimit: null,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-    alert("Registration successful! Please login.");
+    alert("Registration successful! A verification email has been sent. Please verify your email before logging in.");
     switchTab(true);
     document.getElementById('loginEmail').value = email;
     document.getElementById('loginPassword').value = '';
   } catch(error) {
     alert("Registration failed: " + error.message);
+  }
+}
+async function resendVerificationEmail() {
+  if (currentUser && !currentUser.emailVerified) {
+    await currentUser.sendEmailVerification();
+    alert("Verification email resent. Please check your inbox.");
+  } else {
+    logout();
   }
 }
 function logout() {
@@ -547,6 +670,7 @@ function logout() {
     transactions = [];
     authOverlay.style.display = 'flex';
     appContainer.style.display = 'none';
+    verifyNotice.style.display = 'none';
     addMoneyVisible = false; expenseVisible = false;
     addMoneySection.style.display = 'none';
     expenseSection.style.display = 'none';
@@ -556,10 +680,11 @@ function logout() {
     if (spendingChart) { spendingChart.destroy(); spendingChart = null; }
     dynamicPanelDiv.innerHTML = '';
     profileUpload.value = '';
+    monthlyLimitInput.value = '';
+    monthlyLimit = null;
   });
 }
 
-// ========== PASSWORD TOGGLE FUNCTION ==========
 function initPasswordToggles() {
   const toggleIcons = document.querySelectorAll('.toggle-password');
   toggleIcons.forEach(icon => {
@@ -581,7 +706,7 @@ function initPasswordToggles() {
   });
 }
 
-// Event listeners
+// ========== EVENT LISTENERS ==========
 showAddMoneyPanelBtn.addEventListener('click', showAddMoneyPanelUI);
 showExpensePanelBtn.addEventListener('click', showExpensePanelUI);
 toggleAddMoneyBtn.addEventListener('click', toggleAddMoney);
@@ -601,6 +726,10 @@ loginBtn.addEventListener('click', handleLogin);
 registerBtn.addEventListener('click', handleRegister);
 loginTab.addEventListener('click', () => switchTab(true));
 registerTab.addEventListener('click', () => switchTab(false));
+resendVerifyBtn.addEventListener('click', resendVerificationEmail);
+logoutFromVerifyBtn.addEventListener('click', logout);
+exportCsvBtn.addEventListener('click', exportToCSV);
+setLimitBtn.addEventListener('click', setMonthlyLimit);
 
 // Profile picture events
 profileUpload.addEventListener('change', handleProfileUpload);
@@ -613,26 +742,36 @@ if (profilePicWrapper) {
   });
 }
 
-// Check existing auth session
+// ========== AUTH STATE MONITORING ==========
 auth.onAuthStateChanged(async (user) => {
   if (user) {
-    currentUser = user;
-    currentUserId = user.uid;
-    userDisplay.innerText = user.displayName || user.email.split('@')[0];
-    await loadUserData();
-    authOverlay.style.display = 'none';
-    appContainer.style.display = 'block';
-    addMoneyVisible = false; expenseVisible = false;
-    addMoneySection.style.display = 'none';
-    expenseSection.style.display = 'none';
-    chartWrapper.style.display = 'none';
-    toggleAddMoneyBtn.innerHTML = '<i class="fas fa-eye"></i> Show Add Money';
-    toggleExpenseBtn.innerHTML = '<i class="fas fa-eye"></i> Show Expenses';
-    if (spendingChart) { spendingChart.destroy(); spendingChart = null; }
-    dynamicPanelDiv.innerHTML = '';
+    if (!user.emailVerified) {
+      authOverlay.style.display = 'none';
+      appContainer.style.display = 'none';
+      verifyNotice.style.display = 'flex';
+      currentUser = user;
+      currentUserId = user.uid;
+    } else {
+      currentUser = user;
+      currentUserId = user.uid;
+      userDisplay.innerText = currentUser.displayName || user.email.split('@')[0];
+      await loadUserData();
+      authOverlay.style.display = 'none';
+      appContainer.style.display = 'block';
+      verifyNotice.style.display = 'none';
+      addMoneyVisible = false; expenseVisible = false;
+      addMoneySection.style.display = 'none';
+      expenseSection.style.display = 'none';
+      chartWrapper.style.display = 'none';
+      toggleAddMoneyBtn.innerHTML = '<i class="fas fa-eye"></i> Show Add Money';
+      toggleExpenseBtn.innerHTML = '<i class="fas fa-eye"></i> Show Expenses';
+      if (spendingChart) { spendingChart.destroy(); spendingChart = null; }
+      dynamicPanelDiv.innerHTML = '';
+    }
   } else {
     authOverlay.style.display = 'flex';
     appContainer.style.display = 'none';
+    verifyNotice.style.display = 'none';
   }
 });
 initDarkMode();
