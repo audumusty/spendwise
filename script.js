@@ -330,7 +330,7 @@ function renderAddMoneyTable() {
       <td><button class="edit-trans" data-id="${t.id}"><i class="fas fa-edit"></i></button> <button class="delete-trans" data-id="${t.id}"><i class="fas fa-trash-alt"></i></button></td>
     </tr>`;
   });
-  html += `</tbody></table></div>`;
+  html += `</tbody><tr></div>`;
   addMoneyContainer.innerHTML = html;
 }
 
@@ -344,7 +344,7 @@ function renderExpenseTable() {
     expenseContainer.innerHTML = '<div class="empty-table-msg">No expense transactions for this period/search.</div>';
     return;
   }
-  let html = `<div class="transaction-table-wrapper"><table class="transaction-table"><thead><tr><th>Category</th><th>Description</th><th>Timestamp</th><th>Amount</th><th>Actions</th></tr></thead><tbody>`;
+  let html = `<div class="transaction-table-wrapper"><table class="transaction-table"><thead><tr><th>Category</th><th>Description</th><th>Timestamp</th><th>Amount</th><th>Actions</th></td></thead><tbody>`;
   sorted.forEach(t => {
     html += `<tr data-id="${t.id}">
       <td><span class="category-badge">${escapeHtml(t.category)}</span></td>
@@ -352,7 +352,7 @@ function renderExpenseTable() {
       <td class="transaction-timestamp"><i class="far fa-calendar-alt"></i> ${escapeHtml(new Date(t.timestamp).toLocaleString())}</td>
       <td class="transaction-amount expense-amount">${formatNaira(t.amount)}</td>
       <td><button class="edit-trans" data-id="${t.id}"><i class="fas fa-edit"></i></button> <button class="delete-trans" data-id="${t.id}"><i class="fas fa-trash-alt"></i></button></td>
-    </td>`;
+    </tr>`;
   });
   html += `</tbody></table></div>`;
   expenseContainer.innerHTML = html;
@@ -598,7 +598,7 @@ function removeProfilePicture() {
   }
 }
 
-// ========== AUTH UI ==========
+// ========== AUTH UI (Simplified messages) ==========
 function switchTab(showLogin) {
   if (showLogin) {
     loginFormDiv.style.display = 'block';
@@ -620,12 +620,10 @@ async function handleLogin() {
     const userCredential = await auth.signInWithEmailAndPassword(email, password);
     const user = userCredential.user;
     if (!user.emailVerified) {
-      // Show verification notice with resend option
       authOverlay.style.display = 'none';
       verifyNotice.style.display = 'flex';
       currentUser = user;
       currentUserId = user.uid;
-      // Add a manual refresh option to check if email was verified in another tab
       return;
     }
     currentUser = user;
@@ -667,11 +665,11 @@ async function handleRegister() {
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     await auth.signOut();
-    alert("✅ Registration successful! A verification email has been sent to " + email + ".\n\n📧 Please check your inbox and spam folder, then click the link to verify your email.\n\nAfter verification, log in.");
+    // Simple, direct message
+    alert("✅ Registration successful!\n\nA verification email has been sent to " + email + ".\n\nPlease check your inbox and spam folder, then log in.");
     switchTab(true);
     document.getElementById('loginEmail').value = email;
     document.getElementById('loginPassword').value = '';
-    // Clear registration form
     document.getElementById('regFullName').value = '';
     document.getElementById('regEmail').value = '';
     document.getElementById('regPassword').value = '';
@@ -684,7 +682,7 @@ async function resendVerificationEmail() {
   if (currentUser && !currentUser.emailVerified) {
     try {
       await currentUser.sendEmailVerification();
-      alert(`✅ Verification email resent to ${currentUser.email}. Please check your inbox and spam folder.`);
+      alert(`✅ Verification email resent to ${currentUser.email}. Check spam folder.`);
     } catch(e) {
       alert("Failed to resend: " + e.message);
     }
@@ -720,16 +718,14 @@ function logout() {
   });
 }
 
-// Manual check for email verification (for users who verified in another tab)
 async function checkVerificationStatus() {
   if (currentUser && !currentUser.emailVerified) {
     await currentUser.reload();
     if (currentUser.emailVerified) {
-      // User just verified, reload the app
-      alert("✅ Email verified! You can now log in.");
-      logout(); // return to login screen
+      alert("✅ Email verified! Please log in again.");
+      logout();
     } else {
-      alert("Email still not verified. Please check your inbox and spam folder.");
+      alert("Email not verified yet. Check your inbox/spam.");
     }
   }
 }
@@ -780,7 +776,7 @@ logoutFromVerifyBtn.addEventListener('click', logout);
 exportCsvBtn.addEventListener('click', exportToCSV);
 setLimitBtn.addEventListener('click', setMonthlyLimit);
 
-// Add a "Check Now" button to the verification notice (if it doesn't exist, add dynamically)
+// Add Check Now button if not present
 if (resendVerifyBtn && resendVerifyBtn.parentNode) {
   let checkBtn = document.getElementById('checkVerifyBtn');
   if (!checkBtn) {
