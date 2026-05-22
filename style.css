@@ -250,7 +250,7 @@ body.dark .profile-name {
   background: rgba(255,255,255,0.1);
 }
 
-/* Balance Card – no overflow, responsive text */
+/* Balance Card – never overflow, always fit */
 .balance-card {
   background: linear-gradient(135deg, #1e3a5f, #1c6e5e);
   border-radius: 1.5rem;
@@ -258,13 +258,17 @@ body.dark .profile-name {
   color: white;
   text-align: center;
   margin-bottom: 1.5rem;
+  overflow-x: auto;
 }
 .balance-amount {
-  font-size: clamp(1.8rem, 8vw, 2.8rem);
+  font-size: clamp(1.4rem, 6vw, 2.5rem);
   font-weight: 800;
-  word-break: break-word;
+  word-break: break-all;
   overflow-wrap: break-word;
+  white-space: normal;
   line-height: 1.2;
+  display: inline-block;
+  max-width: 100%;
 }
 
 /* Action Cards – stack on mobile, moderate size */
@@ -405,7 +409,7 @@ body.dark .action-card:last-child h3 { color: #fed7aa; }
 }
 body.dark .small-btn { background: #2d3748; color: #e2e8f0; }
 
-/* Tables – horizontal scroll on mobile */
+/* Tables – horizontal scroll on mobile, amounts wrap */
 .transaction-table-wrapper {
   overflow-x: auto;
   border-radius: 0.8rem;
@@ -432,6 +436,7 @@ body.dark .small-btn { background: #2d3748; color: #e2e8f0; }
 .transaction-table td {
   padding: 8px 6px;
   vertical-align: middle;
+  word-break: break-word;
 }
 .transaction-table tbody tr:nth-child(even) { background-color: var(--table-row-even); }
 .transaction-table tbody tr:nth-child(odd) { background-color: var(--table-row-odd); }
@@ -451,7 +456,12 @@ body.dark .small-btn { background: #2d3748; color: #e2e8f0; }
   font-family: monospace;
   white-space: nowrap;
 }
-.transaction-amount { font-weight: 700; font-size: 0.85rem; }
+.transaction-amount {
+  font-weight: 700;
+  font-size: 0.85rem;
+  word-break: break-word;
+  white-space: normal;
+}
 .income-amount { color: #10b981; }
 .expense-amount { color: #ef4444; }
 .delete-trans, .edit-trans {
@@ -523,7 +533,7 @@ body.dark .small-btn { background: #2d3748; color: #e2e8f0; }
 .modal-buttons button { padding: 6px 12px; }
 #editCategoryGroup { display: block; }
 
-/* Password toggle – already present, keep as is */
+/* Password toggle */
 .password-wrapper {
   position: relative;
   width: 100%;
