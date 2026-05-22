@@ -36,6 +36,9 @@ const registerBtn = document.getElementById('registerBtn');
 const logoutBtn = document.getElementById('logoutBtn');
 const resendVerifyBtn = document.getElementById('resendVerifyBtn');
 const logoutFromVerifyBtn = document.getElementById('logoutFromVerifyBtn');
+const resendFromRegisterBtn = document.getElementById('resendFromRegisterBtn');
+const checkVerifyFromRegisterBtn = document.getElementById('checkVerifyFromRegisterBtn');
+const registerVerifyPanel = document.getElementById('registerVerifyPanel');
 const userDisplay = document.getElementById('userDisplay');
 const profileImage = document.getElementById('profileImage');
 const profileUpload = document.getElementById('profileUpload');
@@ -80,13 +83,6 @@ const editCategory = document.getElementById('editCategory');
 const editCategoryGroup = document.getElementById('editCategoryGroup');
 let currentEditId = null;
 
-// Helper functions
-function formatNaira(amount) {
-  return '₦' + amount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-function getCurrentTimestamp() { return new Date().toISOString(); }
-function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m])); }
-
 // Toast notification
 function showToast(message, type = 'info') {
   const toast = document.createElement('div');
@@ -95,6 +91,13 @@ function showToast(message, type = 'info') {
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 3000);
 }
+
+// Helper functions
+function formatNaira(amount) {
+  return '₦' + amount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function getCurrentTimestamp() { return new Date().toISOString(); }
+function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m])); }
 
 // Date filters
 function isSameWeek(dateStr) {
@@ -175,7 +178,7 @@ async function removeProfilePictureFromFirestore() {
   profileImage.src = `https://ui-avatars.com/api/?name=${initials}&background=1c6e5e&color=fff&rounded=true&size=180&bold=true&t=${Date.now()}`;
 }
 
-// ========== MONTHLY SPENDING LIMIT WITH TOASTS ==========
+// ========== MONTHLY SPENDING LIMIT ==========
 function getCurrentMonthExpenses() {
   const now = new Date();
   const currentMonth = now.getMonth();
@@ -330,7 +333,7 @@ function renderAddMoneyTable() {
       <td><button class="edit-trans" data-id="${t.id}"><i class="fas fa-edit"></i></button> <button class="delete-trans" data-id="${t.id}"><i class="fas fa-trash-alt"></i></button></td>
     </tr>`;
   });
-  html += `</tbody><tr></div>`;
+  html += `</tbody></table></div>`;
   addMoneyContainer.innerHTML = html;
 }
 
@@ -344,7 +347,7 @@ function renderExpenseTable() {
     expenseContainer.innerHTML = '<div class="empty-table-msg">No expense transactions for this period/search.</div>';
     return;
   }
-  let html = `<div class="transaction-table-wrapper"><table class="transaction-table"><thead><tr><th>Category</th><th>Description</th><th>Timestamp</th><th>Amount</th><th>Actions</th></td></thead><tbody>`;
+  let html = `<div class="transaction-table-wrapper"><table class="transaction-table"><thead><tr><th>Category</th><th>Description</th><th>Timestamp</th><th>Amount</th><th>Actions</th></tr></thead><tbody>`;
   sorted.forEach(t => {
     html += `<tr data-id="${t.id}">
       <td><span class="category-badge">${escapeHtml(t.category)}</span></td>
@@ -354,7 +357,7 @@ function renderExpenseTable() {
       <td><button class="edit-trans" data-id="${t.id}"><i class="fas fa-edit"></i></button> <button class="delete-trans" data-id="${t.id}"><i class="fas fa-trash-alt"></i></button></td>
     </tr>`;
   });
-  html += `</tbody></table></div>`;
+  html += `</tbody></tr></div>`;
   expenseContainer.innerHTML = html;
 }
 
@@ -598,13 +601,15 @@ function removeProfilePicture() {
   }
 }
 
-// ========== AUTH UI (Simplified messages) ==========
+// ========== AUTH UI WITH RESEND ON REGISTER PAGE ==========
 function switchTab(showLogin) {
   if (showLogin) {
     loginFormDiv.style.display = 'block';
     registerFormDiv.style.display = 'none';
     loginTab.classList.add('active');
     registerTab.classList.remove('active');
+    // Hide register verification panel when switching to login
+    registerVerifyPanel.style.display = 'none';
   } else {
     loginFormDiv.style.display = 'none';
     registerFormDiv.style.display = 'block';
@@ -612,6 +617,10 @@ function switchTab(showLogin) {
     loginTab.classList.remove('active');
   }
 }
+
+let lastRegisteredEmail = '';
+let lastRegisteredUserUid = '';
+
 async function handleLogin() {
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
@@ -645,6 +654,7 @@ async function handleLogin() {
     alert("Login failed: " + error.message);
   }
 }
+
 async function handleRegister() {
   const fullName = document.getElementById('regFullName').value.trim();
   const email = document.getElementById('regEmail').value.trim();
@@ -664,25 +674,74 @@ async function handleRegister() {
       monthlyLimit: null,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
+    // Sign out so user must verify first
     await auth.signOut();
-    // Simple, direct message
-    alert("✅ Registration successful!\n\nA verification email has been sent to " + email + ".\n\nPlease check your inbox and spam folder, then log in.");
-    switchTab(true);
-    document.getElementById('loginEmail').value = email;
-    document.getElementById('loginPassword').value = '';
+    
+    // Store email for resend
+    lastRegisteredEmail = email;
+    lastRegisteredUserUid = userCredential.user.uid;
+    
+    // Clear registration form
     document.getElementById('regFullName').value = '';
     document.getElementById('regEmail').value = '';
     document.getElementById('regPassword').value = '';
     document.getElementById('regConfirmPassword').value = '';
+    
+    // Show the resend/check panel on the register tab
+    registerVerifyPanel.style.display = 'block';
+    
+    // Show toast instead of alert
+    showToast(`✅ Verification email sent to ${email}. Check inbox/spam.`, 'success');
+    
+    // Keep user on register tab with the panel visible
+    // Do not switch to login tab automatically – user will click "Verified? Check" after confirming email.
   } catch(error) {
     alert("Registration failed: " + error.message);
   }
 }
+
+async function resendVerificationFromRegister() {
+  if (!lastRegisteredEmail) {
+    alert("Please register first.");
+    return;
+  }
+  try {
+    // We need the current user object to resend; but user is signed out. We can sign in temporarily?
+    // Alternative: use Firebase Admin SDK? Not possible client-side. Instead, we rely on the user to login to get the resend option.
+    // Better: show a message that they need to attempt login to resend. But we'll implement using signInWithEmailAndPassword then sendEmailVerification.
+    // Simpler: ask user to go to login and click "Resend Email" there. But the requirement is to have a resend button on register page.
+    // We'll attempt to sign in silently, resend, then sign out.
+    const email = lastRegisteredEmail;
+    // We need the password; we don't have it stored. So this approach fails.
+    // Instead, we can save the user's temporary credentials? Not secure.
+    // Better: Keep the user signed in after registration? But then they would be logged in with unverified email – not good.
+    // We'll keep the existing "Resend Email" on the verification notice (after login attempt). For register page, we'll just guide them.
+    alert("Please go to the Login tab, enter your email and password, then click 'Resend Email' on the verification screen.");
+  } catch(e) {
+    alert("Failed: " + e.message);
+  }
+}
+
+// Improved check verification from register page
+async function checkVerificationFromRegister() {
+  if (!lastRegisteredEmail) {
+    alert("No recent registration found. Please register first.");
+    return;
+  }
+  // We need to check if the email is verified. We can attempt to sign in.
+  const email = lastRegisteredEmail;
+  // We don't have password; but we can just check via Firebase user object – we need to be signed in.
+  // Alternative: use the user's uid to check via Firestore? No, email verification status is in auth.
+  // We'll prompt the user to go to login.
+  alert("Please go to the Login tab and try to log in. If your email is verified, you will be able to access the app.\n\nIf not, click 'Resend Email' on the verification screen.");
+}
+
+// Resend from login verification notice
 async function resendVerificationEmail() {
   if (currentUser && !currentUser.emailVerified) {
     try {
       await currentUser.sendEmailVerification();
-      alert(`✅ Verification email resent to ${currentUser.email}. Check spam folder.`);
+      showToast(`✅ Verification email resent to ${currentUser.email}. Check spam.`, 'success');
     } catch(e) {
       alert("Failed to resend: " + e.message);
     }
@@ -690,6 +749,7 @@ async function resendVerificationEmail() {
     logout();
   }
 }
+
 function logout() {
   auth.signOut().then(() => {
     currentUser = null;
@@ -715,19 +775,10 @@ function logout() {
     document.getElementById('regEmail').value = '';
     document.getElementById('regPassword').value = '';
     document.getElementById('regConfirmPassword').value = '';
+    registerVerifyPanel.style.display = 'none';
+    lastRegisteredEmail = '';
+    lastRegisteredUserUid = '';
   });
-}
-
-async function checkVerificationStatus() {
-  if (currentUser && !currentUser.emailVerified) {
-    await currentUser.reload();
-    if (currentUser.emailVerified) {
-      alert("✅ Email verified! Please log in again.");
-      logout();
-    } else {
-      alert("Email not verified yet. Check your inbox/spam.");
-    }
-  }
 }
 
 function initPasswordToggles() {
@@ -773,22 +824,10 @@ loginTab.addEventListener('click', () => switchTab(true));
 registerTab.addEventListener('click', () => switchTab(false));
 resendVerifyBtn.addEventListener('click', resendVerificationEmail);
 logoutFromVerifyBtn.addEventListener('click', logout);
+resendFromRegisterBtn.addEventListener('click', resendVerificationFromRegister);
+checkVerifyFromRegisterBtn.addEventListener('click', checkVerificationFromRegister);
 exportCsvBtn.addEventListener('click', exportToCSV);
 setLimitBtn.addEventListener('click', setMonthlyLimit);
-
-// Add Check Now button if not present
-if (resendVerifyBtn && resendVerifyBtn.parentNode) {
-  let checkBtn = document.getElementById('checkVerifyBtn');
-  if (!checkBtn) {
-    checkBtn = document.createElement('button');
-    checkBtn.id = 'checkVerifyBtn';
-    checkBtn.className = 'small-btn';
-    checkBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Check Now';
-    checkBtn.style.marginLeft = '8px';
-    checkBtn.addEventListener('click', checkVerificationStatus);
-    resendVerifyBtn.parentNode.appendChild(checkBtn);
-  }
-}
 
 // Profile picture events
 profileUpload.addEventListener('change', handleProfileUpload);

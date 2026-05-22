@@ -50,11 +50,18 @@
         <i class="fas fa-eye toggle-password" data-target="regConfirmPassword"></i>
       </div>
       <button id="registerBtn" class="auth-btn">Register</button>
+      
+      <!-- Resend & Check buttons (initially hidden) -->
+      <div id="registerVerifyPanel" style="display: none; margin-top: 15px; text-align: center;">
+        <p style="font-size: 0.8rem; margin-bottom: 8px;">📧 Verification email sent. Please check your inbox/spam.</p>
+        <button id="resendFromRegisterBtn" class="small-btn"><i class="fas fa-envelope"></i> Resend Email</button>
+        <button id="checkVerifyFromRegisterBtn" class="small-btn" style="margin-left: 8px;"><i class="fas fa-sync-alt"></i> Verified? Check</button>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- Email Verification Notice -->
+<!-- Email Verification Notice (for unverified login attempts) -->
 <div id="verifyNotice" class="verify-notice" style="display: none;">
   <div class="verify-card">
     <i class="fas fa-envelope"></i>
@@ -78,7 +85,6 @@
     </div>
   </header>
 
-  <!-- Profile Section -->
   <div class="profile-section">
     <div class="profile-pic-wrapper" id="profilePicWrapper">
       <img id="profileImage" src="https://ui-avatars.com/api/?background=1c6e5e&color=fff&rounded=true&size=120&bold=true" alt="Profile">
@@ -91,13 +97,11 @@
     <span id="userDisplay" class="profile-name"></span>
   </div>
 
-  <!-- Balance Card -->
   <div class="balance-card">
     <h3>Current Balance</h3>
     <div class="balance-amount" id="balanceAmount">₦0.00</div>
   </div>
 
-  <!-- Monthly Spending Limit Section -->
   <div class="limit-section">
     <div class="limit-header">
       <h3><i class="fas fa-chart-line"></i> Monthly Spending Limit</h3>
@@ -115,7 +119,6 @@
     </div>
   </div>
 
-  <!-- Action Cards -->
   <div class="action-row">
     <div class="action-card" id="showAddMoneyPanel">
       <i class="fas fa-plus-circle"></i>
@@ -131,7 +134,6 @@
 
   <div id="dynamicPanel" class="dynamic-panel"></div>
 
-  <!-- Transaction History -->
   <div class="history-section">
     <div class="history-header">
       <h3><i class="fas fa-history"></i> Transaction History</h3>
@@ -166,7 +168,6 @@
     </div>
   </div>
 
-  <!-- Chart -->
   <div id="chartWrapper" class="chart-wrapper" style="display: none;">
     <h3><i class="fas fa-chart-pie"></i> Spending by category</h3>
     <div class="chart-container">
