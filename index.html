@@ -30,6 +30,9 @@
         <i class="fas fa-eye toggle-password" data-target="loginPassword"></i>
       </div>
       <button id="loginBtn" class="auth-btn">Login</button>
+      <div style="text-align: right; margin-top: 8px;">
+        <button id="forgotPasswordBtn" class="small-btn" style="background: none; border: none; color: #1c6e5e;">Forgot Password?</button>
+      </div>
     </div>
     
     <!-- Register Form -->
@@ -51,22 +54,60 @@
       </div>
       <button id="registerBtn" class="auth-btn">Register</button>
       
-      <!-- Resend & Check buttons (initially hidden) -->
       <div id="registerVerifyPanel" style="display: none; margin-top: 15px; text-align: center;">
-        <p style="font-size: 0.8rem; margin-bottom: 8px;">📧 Verification email sent. Please check your inbox/spam.</p>
+        <p style="font-size: 0.8rem; margin-bottom: 8px;">📧 Verify your email</p>
         <button id="resendFromRegisterBtn" class="small-btn"><i class="fas fa-envelope"></i> Resend Email</button>
-        <button id="checkVerifyFromRegisterBtn" class="small-btn" style="margin-left: 8px;"><i class="fas fa-sync-alt"></i> Verified? Check</button>
+        <button id="logoutFromRegisterBtn" class="small-btn cancel" style="margin-left: 8px;"><i class="fas fa-sign-out-alt"></i> Logout</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Email Verification Notice (for unverified login attempts) -->
+<!-- Forgot Password Modal -->
+<div id="forgotModal" class="modal">
+  <div class="modal-content">
+    <span class="close-modal" id="closeForgotModal">&times;</span>
+    <h3><i class="fas fa-key"></i> Reset Password</h3>
+    <p>Enter your email address and we'll send a reset link.</p>
+    <div class="form-group">
+      <input type="email" id="resetEmail" placeholder="Email Address" required>
+    </div>
+    <div class="modal-buttons">
+      <button id="sendResetBtn" class="small-btn">Send Reset Email</button>
+      <button id="cancelForgotBtn" class="small-btn cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Change Password Modal -->
+<div id="changePasswordModal" class="modal">
+  <div class="modal-content">
+    <span class="close-modal" id="closeChangeModal">&times;</span>
+    <h3><i class="fas fa-key"></i> Change Password</h3>
+    <div class="form-group">
+      <input type="password" id="currentPassword" placeholder="Current Password" required>
+    </div>
+    <div class="form-group password-wrapper">
+      <input type="password" id="newPassword" placeholder="New Password" required>
+      <i class="fas fa-eye toggle-password" data-target="newPassword"></i>
+    </div>
+    <div class="form-group password-wrapper">
+      <input type="password" id="confirmNewPassword" placeholder="Confirm New Password" required>
+      <i class="fas fa-eye toggle-password" data-target="confirmNewPassword"></i>
+    </div>
+    <div class="modal-buttons">
+      <button id="saveChangePasswordBtn" class="small-btn">Update Password</button>
+      <button id="cancelChangeBtn" class="small-btn cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Email Verification Notice -->
 <div id="verifyNotice" class="verify-notice" style="display: none;">
   <div class="verify-card">
     <i class="fas fa-envelope"></i>
     <h3>Verify Your Email</h3>
-    <p>We've sent a verification link to your email address. Please verify your account to access SpendWise.</p>
+    <p>We've sent a verification link to your email. Please check spam.</p>
     <button id="resendVerifyBtn" class="small-btn">Resend Email</button>
     <button id="logoutFromVerifyBtn" class="small-btn cancel">Logout</button>
   </div>
@@ -80,6 +121,7 @@
       <p>Add money → spend wisely → track every naira</p>
     </div>
     <div class="header-buttons">
+      <button id="changePasswordBtn" class="dark-mode-btn"><i class="fas fa-key"></i> Change Password</button>
       <button id="logoutBtn" class="dark-mode-btn"><i class="fas fa-sign-out-alt"></i> Logout</button>
       <button id="darkModeToggle" class="dark-mode-btn"><i class="fas fa-moon"></i></button>
     </div>
@@ -177,7 +219,7 @@
   </div>
 </div>
 
-<!-- Edit Modal -->
+<!-- Edit Modal (unchanged) -->
 <div id="editModal" class="modal">
   <div class="modal-content">
     <span class="close-modal">&times;</span>
