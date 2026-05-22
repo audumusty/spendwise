@@ -20,8 +20,8 @@ let addMoneyVisible = false;
 let expenseVisible = false;
 let currentUser = null;
 let currentUserId = null;
-let monthlyLimit = null; // stored as number (₦)
-let currentMonthSpending = 0;
+let monthlyLimit = null;
+let lastToastPercent = 0; // to avoid repeated toasts
 
 // DOM elements
 const authOverlay = document.getElementById('authOverlay');
@@ -86,6 +86,17 @@ function formatNaira(amount) {
 }
 function getCurrentTimestamp() { return new Date().toISOString(); }
 function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m])); }
+
+// Toast notification
+function showToast(message, type = 'info') {
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.innerText = message;
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.remove();
+  }, 3000);
+}
 
 // Date filters
 function isSameWeek(dateStr) {
@@ -166,7 +177,7 @@ async function removeProfilePictureFromFirestore() {
   profileImage.src = `https://ui-avatars.com/api/?name=${initials}&background=1c6e5e&color=fff&rounded=true&size=180&bold=true&t=${Date.now()}`;
 }
 
-// ========== MONTHLY SPENDING LIMIT ==========
+// ========== MONTHLY SPENDING LIMIT WITH TOASTS ==========
 function getCurrentMonthExpenses() {
   const now = new Date();
   const currentMonth = now.getMonth();
@@ -191,20 +202,30 @@ function updateMonthlySpending() {
       spendingProgressBar.classList.remove('warning');
       limitStatusSpan.innerText = '⚠️ Limit exceeded!';
       limitStatusSpan.style.color = '#ef4444';
+      if (lastToastPercent !== 100) {
+        showToast(`⚠️ You have exceeded your monthly limit of ${formatNaira(monthlyLimit)}!`, 'danger');
+        lastToastPercent = 100;
+      }
     } else if (percent >= 80) {
       spendingProgressBar.classList.add('warning');
       spendingProgressBar.classList.remove('danger');
       limitStatusSpan.innerText = '⚠️ Getting close to limit';
       limitStatusSpan.style.color = '#f59e0b';
+      if (lastToastPercent < 80) {
+        showToast(`⚠️ You have used ${percent.toFixed(0)}% of your monthly limit (${formatNaira(monthlyLimit)}).`, 'warning');
+        lastToastPercent = 80;
+      }
     } else {
       spendingProgressBar.classList.remove('warning', 'danger');
       limitStatusSpan.innerText = `${percent.toFixed(1)}% used`;
       limitStatusSpan.style.color = 'var(--text-color)';
+      if (percent < 80) lastToastPercent = 0;
     }
   } else {
     spendingProgressBar.style.width = '0%';
     limitStatusSpan.innerText = 'No limit set';
     limitStatusSpan.style.color = 'var(--text-color)';
+    lastToastPercent = 0;
   }
 }
 
@@ -213,9 +234,10 @@ async function setMonthlyLimit() {
   if (isNaN(value) || value <= 0) {
     monthlyLimit = null;
     monthlyLimitInput.value = '';
-    alert("Limit removed.");
+    showToast(`Monthly limit removed.`, 'info');
   } else {
     monthlyLimit = value;
+    showToast(`Monthly spending limit set to ${formatNaira(monthlyLimit)}`, 'success');
   }
   await saveUserData();
   updateMonthlySpending();
@@ -223,7 +245,6 @@ async function setMonthlyLimit() {
 
 // ========== EXPORT CSV ==========
 function exportToCSV() {
-  // Export all transactions (not filtered by period – full history)
   if (transactions.length === 0) {
     alert("No transactions to export.");
     return;
@@ -302,7 +323,7 @@ function renderAddMoneyTable() {
     addMoneyContainer.innerHTML = '<div class="empty-table-msg">No add money transactions for this period/search.</div>';
     return;
   }
-  let html = `<div class="transaction-table-wrapper"><table class="transaction-table"><thead><tr><th>Description</th><th>Timestamp</th><th>Amount</th><th>Actions</th></tr></thead><tbody>`;
+  let html = `<div class="transaction-table-wrapper"><table class="transaction-table"><thead><tr><th>Description</th><th>Timestamp</th><th>Amount</th><th>Actions</th></td></thead><tbody>`;
   sorted.forEach(t => {
     html += `<tr data-id="${t.id}">
       <td class="transaction-desc">${escapeHtml(t.desc)}</td>
@@ -325,7 +346,7 @@ function renderExpenseTable() {
     expenseContainer.innerHTML = '<div class="empty-table-msg">No expense transactions for this period/search.</div>';
     return;
   }
-  let html = `<div class="transaction-table-wrapper"><table class="transaction-table"><thead><tr><th>Category</th><th>Description</th><th>Timestamp</th><th>Amount</th><th>Actions</th></tr></thead><tbody>`;
+  let html = `<div class="transaction-table-wrapper"><table class="transaction-table"><thead><tr><th>Category</th><th>Description</th><th>Timestamp</th><th>Amount</th><th>Actions</th></td></thead><tbody>`;
   sorted.forEach(t => {
     html += `<tr data-id="${t.id}">
       <td><span class="category-badge">${escapeHtml(t.category)}</span></td>
@@ -335,7 +356,7 @@ function renderExpenseTable() {
       <td><button class="edit-trans" data-id="${t.id}"><i class="fas fa-edit"></i></button> <button class="delete-trans" data-id="${t.id}"><i class="fas fa-trash-alt"></i></button></td>
     </tr>`;
   });
-  html += `</tbody><table></div>`;
+  html += `</tbody></table></div>`;
   expenseContainer.innerHTML = html;
 }
 
@@ -419,7 +440,7 @@ async function addExpense(amount, desc, category) {
   await saveUserData();
   if (expenseVisible) { renderExpenseTable(); if (spendingChart) updateChart(); }
   updateBalanceDisplay();
-  updateMonthlySpending(); // update spending limit progress
+  updateMonthlySpending(); // triggers toast if needed
   return true;
 }
 async function deleteTransaction(id) {
@@ -601,10 +622,9 @@ async function handleLogin() {
     const userCredential = await auth.signInWithEmailAndPassword(email, password);
     const user = userCredential.user;
     if (!user.emailVerified) {
-      // Show verification notice
       authOverlay.style.display = 'none';
       verifyNotice.style.display = 'flex';
-      currentUser = user; // store partially for resend
+      currentUser = user;
       currentUserId = user.uid;
       return;
     }
@@ -637,7 +657,6 @@ async function handleRegister() {
   try {
     const userCredential = await auth.createUserWithEmailAndPassword(email, password);
     await userCredential.user.updateProfile({ displayName: fullName });
-    // Send verification email
     await userCredential.user.sendEmailVerification();
     await db.collection('users').doc(userCredential.user.uid).set({
       fullName: fullName,
@@ -647,10 +666,15 @@ async function handleRegister() {
       monthlyLimit: null,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-    alert("Registration successful! A verification email has been sent. Please verify your email before logging in.");
+    await auth.signOut();
+    alert("Registration successful! A verification email has been sent. Please verify your email, then log in.");
     switchTab(true);
     document.getElementById('loginEmail').value = email;
     document.getElementById('loginPassword').value = '';
+    document.getElementById('regFullName').value = '';
+    document.getElementById('regEmail').value = '';
+    document.getElementById('regPassword').value = '';
+    document.getElementById('regConfirmPassword').value = '';
   } catch(error) {
     alert("Registration failed: " + error.message);
   }
@@ -682,6 +706,12 @@ function logout() {
     profileUpload.value = '';
     monthlyLimitInput.value = '';
     monthlyLimit = null;
+    document.getElementById('loginEmail').value = '';
+    document.getElementById('loginPassword').value = '';
+    document.getElementById('regFullName').value = '';
+    document.getElementById('regEmail').value = '';
+    document.getElementById('regPassword').value = '';
+    document.getElementById('regConfirmPassword').value = '';
   });
 }
 
@@ -772,6 +802,8 @@ auth.onAuthStateChanged(async (user) => {
     authOverlay.style.display = 'flex';
     appContainer.style.display = 'none';
     verifyNotice.style.display = 'none';
+    currentUser = null;
+    currentUserId = null;
   }
 });
 initDarkMode();
